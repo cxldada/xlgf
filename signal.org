@@ -151,6 +151,7 @@ b.读进程所属的进程组是孤儿进程组，此时读操作返回出错，
 
 
 * signal 函数
+** 函数定义
 #+begin_src c
 #include <signal.h>
 void (*signal(int signo, void (*func)(int)))(int);
@@ -168,3 +169,66 @@ SigFunc *signal(int,SigFunc *);
 1. SIG_IGN，表示忽略信号
 2. SIG_DFL，表示系统默认动作
 3. 当接到此信号时要调用的函数地址。此函数称为信号处理程序或信号捕捉函数
+** 细节说明
+1. 进程启动时，所有信号的状态都是系统默认或者忽略。
+2. 当 exec 一个新的程序时，会将原先要捕捉的信号都改为默认动作。因为在 exec 的新程序中原先的信号捕捉函数地址不再有效
+3. 当 fork 一个新的进程时，原先的信号处理方式还会有效，因为子进程在开始时复制了父进程的内存映像
+4. 此函数无法在不修改信号处理方式的情况下获取信号的当前处理方式
+* 不可靠信号
+早期的信号机制是不可靠的。主要有两点表现
+1. 在进程每次接到信号对其进行处理时，随机将信号动作重置为默认值
+2. 在进程不希望某种信号发生时，它不能关闭该信号
+* 中断的系统调用和自动重启动函数
+早期 UNIX 系统有个特性：如果进程在执行一个 ~低速系统调用~ 而阻塞期间捕捉到一个信号，则该系统调用就被中断不再继续执行。该系统调用出错返回，其 errno 被设置 EINTR。
+为了支持这种特性，将系统调用分为两类：
+1. 其他系统调用
+2. 低速系统调用。可能会使进程永远阻塞的一类系统调用，包括:
+   a. 如果某些类型文件(如读管道、终端设备和网络设备)的数据不存在，则读操作可能会使调用者永久阻塞
+   b. 如果这些数据不能被相同的类型文件立即接受，则写操作可能会使调用者永久阻塞
+   c. 在某种条件发生之前打开某些类型文件，可能会发生阻塞(例如要打开一个终端设备，需要先等待与之连接的调制解调器应答)
+   d. pause 函数和 wait 函数
+   e. 某些 ioctl 操作
+   f. 某些进程间通信函数
+与磁盘 IO 相关的系统调用是一个例外。虽然读写一个磁盘文件可能暂时阻塞调用者，但是除非发生硬件故障，IO 操作总是会很快返回，并使调用者不再处于阻塞状态
+为了解决低速系统调用被中断的问题，4.2BSD 系统引入了自动重启动。支持自动重启动的系统调用包括：
+1. ioctl
+2. read
+3. readv
+4. write
+5. wirtev
+6. wait
+7. waitpid
+前五个函数只对低速设备操作时才会被信号中断，而后两个在捕捉到信号时总是被中断。
+~某些应用程序并不希望这些函数被中断后重启动。实现允许进程基于每个信号禁用此功能~
+* 可重入函数
+进程捕捉到信号并对其进行处理时，进程正在执行的正常指令序列就被信号处理程序临时中断，它首先执行信号处理程序中的指令。如果从信号处理程序中返回，则继续执行在捕捉信号时进程正在执行的正常指令序列。
+在执行一个函数时，进程捕捉到了信号，并开始执行信号处理程序，在这个信号处理程序中有调用了这个函数，如果能够保证函数正常执行则便是为可重入函数；反之如果这样重复调用会导致错误则是不可重入函数
+在信号处理程序中保证调用安全的函数就是可重入函数，也称为异步信号安全的。在信号处理操作期间，会阻塞任何会引起不一致的信号发送
+| abort         | faccessat   | linkat            | select      | socketpair       |
+| accept        | fchmod      | listen            | sem_post    | stat             |
+| access        | fchmodat    | lseek             | send        | symlink          |
+| aio_error     | fchown      | lstat             | sendmsg     | symlinat         |
+| aio_return    | fchownat    | mkdir             | sendto      | tcdrain          |
+| aio_suspend   | fcntl       | mkdirat           | setgid      | tcflow           |
+| alarm         | fdatasync   | mkfifo            | setpgid     | tcflush          |
+| bind          | fexecve     | mkfifoat          | setsid      | tcgetattr        |
+| cfgetispeed   | fork        | mknod             | setsockopt  | time             |
+| cfgetospeed   | fstat       | mknodat           | setuid      | timer_getoverrun |
+| cfsetispeed   | fstatat     | open              | shutdown    | timer_gettime    |
+| cfsetospeed   | fsync       | openat            | sigaction   | timer_settime    |
+| chdir         | ftruncate   | pause             | sigaddset   | times            |
+| chmod         | futimens    | pipe              | sigdelset   | umask            |
+| chown         | getegid     | poll              | sigemptyset | uanme            |
+| clock_gettime | geteuid     | posix_trace_event | sigfillset  | unlink           |
+| close         | getgid      | pselect           | sigismember | unlinkat         |
+| connect       | getgroups   | raise             | signal      | utime            |
+| creat         | getpeername | read              | sigpause    | utimensat        |
+| dup           | getpgrp     | readlink          | sigpending  | utimes           |
+| dup2          | getpid      | readlinkat        | sigprocmask | wait             |
+| execl         | getppid     | recv              | sigqueue    | waitpid          |
+| execle        | getsockname | recvfrom          | sigset      | write            |
+| execv         | getsockopt  | recvmsg           | sigsuspend  |                  |
+| execve        | getuid      | rename            | sleep       |                  |
+| _Exit         | kill        | renameat          | socketmark  |                  |
+| _exit         | link        | rmdir             | socket      |                  |
+有一个通用规则，则信号处理程序中需要保存 errno 的值，在退出信号处理函数时恢复 errno值。
