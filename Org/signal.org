@@ -349,3 +349,12 @@ struct sigaction {
 *** sigaction.sa_mask
 在该信号捕捉函数执行之前，这一信号集会加到进程的信号屏蔽字中。操作系统会自动将接受信号也加入到屏蔽字中
 仅当从信号捕捉程序返回时再将进程的信号屏蔽字恢复为原先值。
+*** sigaction.sa_flags
+1. SA_INTERRUPT：由此信号中断的系统调用不自动重启
+2. SA_NOCLDSTOP：处理 SIGCHLD 信号时，子进程停止不产生此信号，当子进程终止时仍产生此信号。且当停止运行的进程继续执行时不产生 SIGCHLD 信号
+3. SA_NOCLDWAIT：处理 SIGCHLD 信号时，当调用进程的子进程终止时，不产生僵死进程。若调用进程随后调用 wait，则阻塞到它所有子进程都终止。
+4. SA_NODEFER：在执行信号捕捉函数时，系统不自动则色此信号。这种操作对应于早期的不可靠信号
+5. SA_ONSTACK：若用 sigaltstack 已声明了一个替换栈，则此信号递送给替换栈上的进程
+6. SA_RESETHAND：在信号捕捉函数的入口处，将此信号的处理方式重置为 SIG_DFL，并清除 SA_SIGINFO 标志。但是不能自动重制 SIGILL 和 SIGTRAP 信号。此操作对应于早期的不可靠信号
+7. SA_RESTART：由此信号中断的系统调用自动重启动
+8. SA_SIGINFO：对信号处理程序提供了附加信息：一个指向 siginfo 结构的指针以及一个指向进程上下文标识符的指针
