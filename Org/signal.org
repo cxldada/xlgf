@@ -328,3 +328,24 @@ int sigpending(sigset_t *set);
 // 成功返回0，出错返回-1
 #+end_src
 此函数返回一个信号集，对于调用进程而言，其中的各信号是阻塞不能递送的，因而也一定是当前未决的。
+* 函数 sigaction
+#+begin_src c
+#include <signal.h>
+
+int sigaction(int signo, const struct sigaction *restrict act, struct sigaction *restrict oact);
+
+struct sigaction {
+    void (*sa_handler)(int); //信号处理函数
+    sigset_t sa_mask; // 需要阻塞的信号
+    int sa_flags; // 信号选项
+    void (*sa_sigaction)(int, siginfo_t *, void *);
+};
+// 成功返回0；出错返回-1
+#+end_src
+此函数的功能是检查或修改与指定信号相关联的处理动作
+** 参数说明
+*** sigaction.sa_handler
+指向捕捉到信号时要执行的函数
+*** sigaction.sa_mask
+在该信号捕捉函数执行之前，这一信号集会加到进程的信号屏蔽字中。操作系统会自动将接受信号也加入到屏蔽字中
+仅当从信号捕捉程序返回时再将进程的信号屏蔽字恢复为原先值。
